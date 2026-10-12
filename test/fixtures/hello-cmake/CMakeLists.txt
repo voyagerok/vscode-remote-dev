@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(hello CXX)
+set(CMAKE_CXX_STANDARD 17)
+configure_file(config.h.in ${CMAKE_BINARY_DIR}/generated/config.h)
+add_library(greet src/greet.cpp)
+target_include_directories(greet PUBLIC include ${CMAKE_BINARY_DIR}/generated)
+add_executable(hello src/main.cpp)
+target_link_libraries(hello PRIVATE greet)

@@ -1,0 +1,2 @@
+#pragma once
+#define HELLO_GREETING "Hello from @PROJECT_NAME@"

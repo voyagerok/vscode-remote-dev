@@ -1,0 +1,394 @@
+{
+  "name": "remote-dev-local-sources",
+  "displayName": "Remote Dev with Local Sources",
+  "description": "Keep sources local, build and debug on a remote Linux host over SSH (CLion-style 'remote development with local sources').",
+  "version": "0.1.0",
+  "publisher": "voyagerok",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "keywords": [
+    "remote",
+    "ssh",
+    "sync",
+    "cmake",
+    "gdb",
+    "c++"
+  ],
+  "extensionDependencies": [
+    "ms-vscode.cpptools"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:.vscode/remote-dev.json",
+    "onDebugResolve:remote-gdb",
+    "onDebugDynamicConfigurations:remote-gdb",
+    "onTaskType:remote-dev"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Remote Dev",
+      "properties": {
+        "remoteDev.profiles": {
+          "type": "array",
+          "scope": "resource",
+          "default": [],
+          "markdownDescription": "Remote targets. Can also be defined in `.vscode/remote-dev.json` (which takes precedence).",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "host"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string",
+                "description": "Host name or ~/.ssh/config alias."
+              },
+              "port": {
+                "type": "number"
+              },
+              "user": {
+                "type": "string"
+              },
+              "identityFile": {
+                "type": "string"
+              },
+              "remoteRoot": {
+                "type": "string",
+                "description": "Absolute remote path (or ~/...) where sources are mirrored."
+              },
+              "envSetup": {
+                "type": "string",
+                "description": "Shell snippet run before every remote command, e.g. `source /opt/sdk/env.sh`."
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "useGitignore": {
+                "type": "boolean",
+                "default": true
+              },
+              "deleteRemoteOrphans": {
+                "type": "boolean",
+                "default": true
+              },
+              "build": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "remoteDev.activeProfile": {
+          "type": "string",
+          "scope": "resource",
+          "description": "Name of the active profile."
+        },
+        "remoteDev.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Upload changes automatically as files change on disk."
+        },
+        "remoteDev.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Connect and run an initial sync when the workspace opens."
+        },
+        "remoteDev.syncDebounceMs": {
+          "type": "number",
+          "default": 300
+        },
+        "remoteDev.bulkThreshold": {
+          "type": "number",
+          "default": 20,
+          "description": "Batches with more files than this are uploaded as a single tar stream."
+        },
+        "remoteDev.rememberPasswords": {
+          "type": "boolean",
+          "default": true,
+          "description": "Store SSH passwords in VS Code secret storage."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "remoteDev.configure",
+        "title": "Configure Remote Host",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.selectProfile",
+        "title": "Select Profile",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.connect",
+        "title": "Connect",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.disconnect",
+        "title": "Disconnect",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.fullSync",
+        "title": "Resync Project",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.forceSync",
+        "title": "Force Resync Project (compare hashes)",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.syncPath",
+        "title": "Resync with Remote",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.forceSyncPath",
+        "title": "Force Resync with Remote",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.openTerminal",
+        "title": "Open Remote Terminal",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.cmakeConfigure",
+        "title": "CMake Configure",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.build",
+        "title": "Build",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.clean",
+        "title": "Clean",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.selectBuildType",
+        "title": "Select Build Type",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.refreshIntellisense",
+        "title": "Refresh IntelliSense (compile DB + remote headers)",
+        "category": "Remote Dev"
+      },
+      {
+        "command": "remoteDev.showLog",
+        "title": "Show Log",
+        "category": "Remote Dev"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "remoteDev.syncPath",
+          "group": "remoteDev@1",
+          "when": "remoteDev.active"
+        },
+        {
+          "command": "remoteDev.forceSyncPath",
+          "group": "remoteDev@2",
+          "when": "remoteDev.active"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "remoteDev.syncPath",
+          "when": "false"
+        },
+        {
+          "command": "remoteDev.forceSyncPath",
+          "when": "false"
+        }
+      ]
+    },
+    "taskDefinitions": [
+      {
+        "type": "remote-dev",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "sync",
+              "configure",
+              "build",
+              "clean",
+              "run",
+              "command"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "CMake target to build or run."
+          },
+          "buildType": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string",
+            "description": "Shell command (for action=command), executed in remoteRoot."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Workspace folder name (multi-root)."
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Program arguments (for action=run)."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [],
+    "debuggers": [
+      {
+        "type": "remote-gdb",
+        "label": "Remote GDB (Remote Dev)",
+        "languages": [
+          "c",
+          "cpp"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Remote executable path, or `${target:<name>}` for a CMake target. Prompted if omitted."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Remote working directory (defaults to remote build dir)."
+              },
+              "environment": {
+                "type": "array"
+              },
+              "stopAtEntry": {
+                "type": "boolean"
+              },
+              "miDebuggerPath": {
+                "type": "string",
+                "default": "gdb"
+              },
+              "buildBeforeLaunch": {
+                "type": "boolean",
+                "default": true
+              },
+              "setupCommands": {
+                "type": "array"
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "program": {
+                "type": "string"
+              },
+              "processId": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "miDebuggerPath": {
+                "type": "string",
+                "default": "gdb"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "remote-gdb",
+            "request": "launch",
+            "name": "Remote: launch",
+            "program": "",
+            "args": []
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Remote Dev: Launch on remote",
+            "body": {
+              "type": "remote-gdb",
+              "request": "launch",
+              "name": "Remote: launch",
+              "program": "",
+              "args": []
+            }
+          },
+          {
+            "label": "Remote Dev: Attach on remote",
+            "body": {
+              "type": "remote-gdb",
+              "request": "attach",
+              "name": "Remote: attach",
+              "program": "",
+              "processId": "${command:remoteDev.pickRemoteProcess}"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "compile-tests": "tsc -p tsconfig.test.json",
+    "test": "npm run compile-tests && npm run build && mocha 'out/test/unit/**/*.test.js'",
+    "test:remote": "npm run compile-tests && mocha 'out/test/integration/**/*.test.js'",
+    "package": "node esbuild.mjs --production && vsce package --no-dependencies --allow-missing-repository"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "ssh-config": "^5.0.3",
+    "ssh2": "^1.17.0",
+    "tar-stream": "^3.1.7",
+    "vscode-cpptools": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.0",
+    "@types/ssh2": "^1.15.5",
+    "@types/tar-stream": "^3.1.4",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "mocha": "^11.1.0",
+    "typescript": "^5.8.0"
+  }
+}

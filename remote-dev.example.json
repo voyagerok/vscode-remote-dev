@@ -1,0 +1,37 @@
+// Copy to <project>/.vscode/remote-dev.json
+{
+  "activeProfile": "devbox",
+  "profiles": [
+    {
+      "name": "devbox",
+      // user@host[:port] or a Host alias from ~/.ssh/config (ProxyJump supported)
+      "host": "dev@devbox.lan",
+      // where sources are mirrored; default: ~/.remote-dev/<project>-<hash>
+      "remoteRoot": "~/src/myproject",
+      // run before every build/run/debug command
+      "envSetup": "source /opt/toolchain/env.sh",
+      // gitignore syntax, on top of .gitignore and the built-in excludes
+      "exclude": ["/third_party/big-assets/"],
+      "useGitignore": true,
+      "deleteRemoteOrphans": true,
+      "build": {
+        "kind": "cmake",
+        "buildTypes": ["Debug", "RelWithDebInfo"],
+        "buildDir": "cmake-build-${buildType}",
+        "generator": "Ninja",
+        "configureArgs": ["-DENABLE_TESTS=ON"]
+      }
+    },
+    {
+      "name": "makefile-box",
+      "host": "builder",
+      "build": {
+        "kind": "custom",
+        "buildCommand": "make -j$(nproc) ${target}",
+        "cleanCommand": "make clean",
+        "buildDir": "out",
+        "compileCommands": "compile_commands.json"
+      }
+    }
+  ]
+}
